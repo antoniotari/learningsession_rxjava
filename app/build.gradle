@@ -1,0 +1,42 @@
+apply plugin: 'com.android.application' //or apply plugin: 'java'
+apply plugin: 'me.tatarka.retrolambda'
+
+//alternativly, you can use the new plugin syntax for gradle 2.1+
+//plugins {
+//    id "me.tatarka.retrolambda" version "3.1.0"
+//}
+
+android {
+    compileSdkVersion 22
+    buildToolsVersion "22.0.1"
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId "com.antoniotari.java8learning"
+        minSdkVersion 16
+        targetSdkVersion 22
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile 'com.android.support:appcompat-v7:22.2.0'
+    retrolambdaConfig 'net.orfjackal.retrolambda:retrolambda:2.0.2'
+    compile 'com.netflix.rxjava:rxjava-android:0.20.7'
+
+//    compile 'com.aol.simplereact:simple-react:0.86'
+//    compile 'net.sf.m-m-m:mmm-util-backport-java.util.function:1.0.1'
+}
