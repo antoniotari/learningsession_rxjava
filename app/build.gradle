@@ -36,7 +36,8 @@ dependencies {
     compile 'com.android.support:appcompat-v7:22.2.0'
     retrolambdaConfig 'net.orfjackal.retrolambda:retrolambda:2.0.2'
     compile 'com.netflix.rxjava:rxjava-android:0.20.7'
-
+    compile 'com.squareup.okhttp:okhttp:2.4.0'
+    compile 'com.jakewharton:butterknife:6.1.0'
 //    compile 'com.aol.simplereact:simple-react:0.86'
 //    compile 'net.sf.m-m-m:mmm-util-backport-java.util.function:1.0.1'
 }

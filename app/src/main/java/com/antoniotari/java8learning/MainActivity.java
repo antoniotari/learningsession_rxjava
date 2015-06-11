@@ -1,12 +1,28 @@
 package com.antoniotari.java8learning;
 
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
+import com.squareup.okhttp.ResponseBody;
+
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.os.AsyncTask;
+import android.os.AsyncTask.Status;
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
+import android.widget.ImageView;
 import android.widget.TextView;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import butterknife.ButterKnife;
+import butterknife.InjectView;
 import rx.Observable;
 import rx.Subscriber;
 import rx.android.schedulers.AndroidSchedulers;
@@ -17,7 +33,13 @@ import rx.schedulers.Schedulers;
 
 public class MainActivity extends ActionBarActivity {
 
+    static final String URL_IMAGE="http://i536.photobucket.com/albums/ff327/aneely07/zeppelinbanner.jpg";
+
+    @InjectView(R.id.text1)
     TextView mTextView;
+    @InjectView(R.id.image1)
+    ImageView mImageView;
+
     Observable<String> mMyObservable;
     MySubscriber mMySubscriber;
 
@@ -25,15 +47,23 @@ public class MainActivity extends ActionBarActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mTextView = (TextView) findViewById(R.id.text1);
-//        mMyObservable = Observable.create(new Observable.OnSubscribe<String>() {
+        ButterKnife.inject(this);
+
+        doSomeRxStuff();
+        searchWeb();
+        searchWebBetter();
+        //downloadBitmap();
+        downloadBitmapNoLambdaNoReactive();
+    }
+
+    private void doSomeRxStuff(){
+        //        mMyObservable = Observable.create(new Observable.OnSubscribe<String>() {
 //            @Override
 //            public void call(Subscriber<? super String> sub) {
 //                sub.onNext("Hello, world!");
 //                sub.onCompleted();
 //            }
 //        });
-
 
         mMyObservable = Observable.create(this::callOnSubscribe);
         mMySubscriber = new MySubscriber(mTextView::setText);
@@ -55,8 +85,7 @@ public class MainActivity extends ActionBarActivity {
         myObservable2.subscribe(onNextAction, onErrorAction, onCompleteAction);
 
         //chain all together
-        Observable.just("Hello, world! again!").subscribe(System.out::println, System.out::println, () -> {
-        });
+        Observable.just("Hello, world! again!").subscribe(System.out::println, System.out::println, () -> {});
 
         //Wouldn't it be cool if I could transform "Hello, world!" with some intermediary step?
         //in this example we skip onError and onComplete
@@ -91,9 +120,6 @@ public class MainActivity extends ActionBarActivity {
                 .map(s -> s.hashCode())
                 .map(i -> Integer.toString(i))
                 .subscribe(s -> System.out.println(s));
-
-        searchWeb();
-        searchWebBetter();
     }
 
     public void callOnSubscribe(Subscriber sub) {
@@ -178,6 +204,90 @@ public class MainActivity extends ActionBarActivity {
         });
     }
 
+    private Observable<Bitmap> imageService() {
+        return Observable.create(new Observable.OnSubscribe<Bitmap>() {
+            @Override
+            public void call(Subscriber<? super Bitmap> sub) {
+                try {
+                    sub.onNext(downloadImage(URL_IMAGE));
+                } catch (IOException e) {
+                    sub.onError(e);
+                }
+                sub.onCompleted();
+            }
+        })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread());
+    }
+
+    private void downloadBitmap(){
+        imageService()
+                .map(BitmapDrawable::new)
+                .subscribe(mImageView::setImageDrawable,System.out::println,()->System.out.println("completed"));
+    }
+
+    /**
+     * anonymous classes hell
+     */
+    private void downloadBitmapNoLambda(){
+        imageService()
+                .map(new Func1<Bitmap, Drawable>() {
+                    @Override
+                    public Drawable call(final Bitmap bitmap) {
+                        return new BitmapDrawable(bitmap);
+                    }
+                })
+                .subscribe(new Action1<Drawable>() {
+                    @Override
+                    public void call(final Drawable drawable) {
+                        mImageView.setImageDrawable(drawable);
+                    }
+                }, new Action1<Throwable>() {
+                    @Override
+                    public void call(final Throwable throwable) {
+                        System.out.printf(throwable.getLocalizedMessage());
+                    }
+                }, new Action0() {
+                    @Override
+                    public void call() {
+                        System.out.println("completed");
+                    }
+                });
+    }
+
+    private DownloadImageTask mDownloadImageTask;
+    /**
+     *
+     */
+    private void downloadBitmapNoLambdaNoReactive(){
+        mDownloadImageTask = new DownloadImageTask(new ImageDownloadCallback() {
+            @Override
+            public void onImageDownload(final Drawable drawable) {
+                mImageView.setImageDrawable(drawable);
+            }
+
+            @Override
+            public void onDownloadError(final Throwable throwable) {
+                System.out.println(throwable.getLocalizedMessage());
+            }
+
+            @Override
+            public void onCompleted() {
+                System.out.println("completed");
+            }
+        });
+        mDownloadImageTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, URL_IMAGE);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if(mDownloadImageTask!=null && mDownloadImageTask.getStatus()!= Status.FINISHED){
+            mDownloadImageTask.cancel(true);
+        }
+        mDownloadImageTask=null;
+    }
+
     /**
      * Subscriber<T> is an abstract class tha implements Observer<T> and Subscription
      */
@@ -208,5 +318,18 @@ public class MainActivity extends ActionBarActivity {
      */
     interface SubscriberListener {
         void onNext(String s);
+    }
+
+    /**
+     * I'm making it static so we can call it from the static class
+     * normally this would have to be inside the class
+     */
+    public static Bitmap downloadImage(String imageUrl) throws IOException {
+        OkHttpClient client = new OkHttpClient();
+        Request request = new Request.Builder().url(imageUrl).build();
+        Response response = client.newCall(request).execute();
+        ResponseBody in = response.body();
+        InputStream inputStream = in.byteStream();
+        return BitmapFactory.decodeStream(inputStream);
     }
 }
